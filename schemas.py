@@ -1,48 +1,91 @@
 """
-Database Schemas
+Database Schemas for Online Exam Proctoring Portal
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model represents a MongoDB collection.
+Collection name is the lowercase of the class name.
 """
+from typing import List, Optional, Literal, Any
+from pydantic import BaseModel, Field, EmailStr
+from datetime import datetime
 
-from pydantic import BaseModel, Field
-from typing import Optional
-
-# Example schemas (replace with your own):
 
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    email: EmailStr
+    name: str
+    role: Literal["admin", "instructor", "student"] = "student"
+    password_hash: str
+    photo_url: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class ExamQuestion(BaseModel):
+    qid: str
+    type: Literal["mcq", "subjective", "coding"] = "mcq"
+    prompt: str
+    options: Optional[List[str]] = None
+    answer: Optional[Any] = None  # instructors can store key for MCQ
+    points: int = 1
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+
+class Exam(BaseModel):
+    title: str
+    description: Optional[str] = None
+    start_time: datetime
+    duration_minutes: int
+    created_by: str  # user id (instructor/admin)
+    questions: List[ExamQuestion] = []
+    allowed_candidates: Optional[List[str]] = None  # list of student user ids/emails
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ProctorEvent(BaseModel):
+    exam_id: str
+    user_id: str
+    event_type: Literal[
+        "tab_blur",
+        "tab_focus",
+        "multi_face",
+        "face_mismatch",
+        "audio_anomaly",
+        "phone_detected",
+        "gaze_anomaly",
+        "head_pose_anomaly",
+        "screen_share",
+        "frame_analysis",
+        "other"
+    ] = "other"
+    severity: Literal["low", "medium", "high"] = "low"
+    data: Optional[dict] = None
+    timestamp: Optional[datetime] = None
+
+
+class ChatMessage(BaseModel):
+    exam_id: str
+    user_id: str
+    role: Literal["student", "instructor", "system"] = "student"
+    message: str
+    timestamp: Optional[datetime] = None
+
+
+class Submission(BaseModel):
+    exam_id: str
+    user_id: str
+    answers: dict  # questionId -> answer value
+    attachments: Optional[List[str]] = None  # file paths or URLs
+    submitted_at: Optional[datetime] = None
+
+
+class Evidence(BaseModel):
+    exam_id: str
+    user_id: str
+    kind: Literal["image", "audio", "video", "log"] = "image"
+    url: str  # path or S3 URL
+    metadata: Optional[dict] = None
+    created_at: Optional[datetime] = None
+
+
+# Minimal schema response helper (read by tooling if needed)
+class SchemaInfo(BaseModel):
+    collections: List[str]
